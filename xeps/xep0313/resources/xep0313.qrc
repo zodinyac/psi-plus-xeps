@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/" >
+        <file>xep0313.png</file>
+        <file>server_history.png</file>
+    </qresource>
+</RCC>
