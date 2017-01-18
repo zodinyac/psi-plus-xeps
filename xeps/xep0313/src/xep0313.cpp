@@ -11,6 +11,7 @@
 #include "stanzasendinghost.h"
 #include "accountinfoaccessinghost.h"
 #include "optionaccessinghost.h"
+#include "contactinfoaccessinghost.h"
 
 #include <QtCore/QDateTime>
 #include <QtGui/QIcon>
@@ -132,8 +133,20 @@ bool XEP0313::incomingStanza(int Account, const QDomElement &Stanza)
                 From = GetResourceFromJid(From);
             } else {
                 From = RemoveResourceFromJid(From);
+                if (AIHost && CIHost) {
+                    QString Name;
+                    if (From == RemoveResourceFromJid(Stanza.attribute("to"))) {
+                        Name = AIHost->getNick(Account);
+                    } else {
+                        Name = CIHost->name(Account, From);
+                    }
+                    
+                    if (!Name.isEmpty()) {
+                        From = Name;
+                    }
+                }
             }
-            
+
             LastRequestKey = Message.attribute("to");
             if (!LastRequestMUC) {
                 LastRequestKey = RemoveResourceFromJid(LastRequestKey);
@@ -184,6 +197,11 @@ void XEP0313::setStanzaSendingHost(StanzaSendingHost *Host)
 void XEP0313::setAccountInfoAccessingHost(AccountInfoAccessingHost *Host)
 {
     AIHost = Host;
+}
+
+void XEP0313::setContactInfoAccessingHost(ContactInfoAccessingHost *Host)
+{
+    CIHost = Host;
 }
 
 void XEP0313::setOptionAccessingHost(OptionAccessingHost *Host)

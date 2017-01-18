@@ -19,6 +19,7 @@
 #include "gctoolbariconaccessor.h"
 #include "toolbariconaccessor.h"
 #include "optionaccessor.h"
+#include "contactinfoaccessor.h"
 
 #include <QtCore/QMap>
 #include <QtCore/QVector>
@@ -32,11 +33,21 @@ class XEP0313 : public QObject,
                 public EventFilter,
                 public GCToolbarIconAccessor,
                 public ToolbarIconAccessor,
-                public OptionAccessor
+                public OptionAccessor,
+                public ContactInfoAccessor
 {
 	Q_OBJECT
     Q_PLUGIN_METADATA(IID "com.psi-plus.XEP0313")
-	Q_INTERFACES(PsiPlugin PluginInfoProvider StanzaFilter StanzaSender AccountInfoAccessor EventFilter GCToolbarIconAccessor ToolbarIconAccessor OptionAccessor)
+	Q_INTERFACES(PsiPlugin
+                 PluginInfoProvider
+                 StanzaFilter
+                 StanzaSender
+                 AccountInfoAccessor
+                 EventFilter
+                 GCToolbarIconAccessor
+                 ToolbarIconAccessor
+                 OptionAccessor
+                 ContactInfoAccessor)
 
 public:
 	QString name() const;
@@ -56,6 +67,7 @@ public:
     
     void setStanzaSendingHost(StanzaSendingHost *Host);
     void setAccountInfoAccessingHost(AccountInfoAccessingHost *Host);
+    void setContactInfoAccessingHost(ContactInfoAccessingHost *Host);
     
     void setOptionAccessingHost(OptionAccessingHost *Host);
 	void optionChanged(const QString &Option);
@@ -90,6 +102,7 @@ private:
     StanzaSendingHost *SSHost = nullptr;
     AccountInfoAccessingHost *AIHost = nullptr;
     OptionAccessingHost *OAHost = nullptr;
+    ContactInfoAccessingHost *CIHost = nullptr;
     
     
     
