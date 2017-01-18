@@ -77,9 +77,14 @@ private:
     void SendFeaturesRequest(int Account);
     void SendMAMRequest(int Account, bool MUC, const QString &Jid, const QString &AfterMessageId = QString());
     
+    QString GetResourceFromJid(const QString &Jid);
+    QString RemoveResourceFromJid(const QString &Jid);
+    
     bool PluginEnabled = false;
     QMap<int, bool> ServerSupportMam;
     
+    QString LastRequestKey;
+    bool LastRequestMUC;
     QMap<int, QMap<QString, QVector<MessageType>>> Messages;
     
     StanzaSendingHost *SSHost = nullptr;

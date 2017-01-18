@@ -121,31 +121,42 @@ bool XEP0313::incomingStanza(int Account, const QDomElement &Stanza)
         }
     }
     
-    if (Stanza.tagName() == "message" && !Stanza.hasAttribute("type")) {
+    if (Stanza.tagName() == "message" && !Stanza.hasAttribute("type")) {      
         QDomElement Delay = Stanza.firstChildElement("result").firstChildElement("forwarded").firstChildElement("delay");
         QDomElement Message = Stanza.firstChildElement("result").firstChildElement("forwarded").firstChildElement("message");
-        
-        if (Delay.hasAttribute("stamp")) {
+        if (!Message.isNull()) {
+            LastRequestMUC = (Message.attribute("type") == "groupchat");
+            
+            QString From = Message.attribute("from");
+            if (LastRequestMUC) {
+                From = GetResourceFromJid(From);
+            } else {
+                From = RemoveResourceFromJid(From);
+            }
+            
+            LastRequestKey = Message.attribute("to");
+            if (!LastRequestMUC) {
+                LastRequestKey = RemoveResourceFromJid(LastRequestKey);
+                if (LastRequestKey == RemoveResourceFromJid(Stanza.attribute("to"))) {
+                    LastRequestKey = RemoveResourceFromJid(Message.attribute("from"));
+                }
+            }
+            
             MessageType MessageObject;
-            
             MessageObject.DateTime = QDateTime::fromString(Delay.attribute("stamp"), Qt::ISODate);
-            MessageObject.From = Message.attribute("from");
+            MessageObject.From = From;
             MessageObject.Body = Message.firstChildElement("body").text();
+            Messages[Account][LastRequestKey].append(MessageObject);
+        } else {
+            QString Last = Stanza.firstChildElement("fin").firstChildElement("set").firstChildElement("last").text();
+            if (!Last.isEmpty()) {
+                SendMAMRequest(Account, LastRequestMUC, LastRequestKey, Last);
+            }
             
-            // fix it
-            Messages[Account][Message.attribute("to")].append(MessageObject);
-        }
-        
-        QString Last = Stanza.firstChildElement("fin").firstChildElement("set").firstChildElement("last").text();
-        if (!Last.isEmpty()) {
-            // fix it
-            SendMAMRequest(Account, true, Stanza.attribute("from"), Last);
-        }
-        
-        QString Count = Stanza.firstChildElement("fin").firstChildElement("set").firstChildElement("count").text();
-        if (!Count.isEmpty() && Last.isEmpty()) {
-            // fix it
-            new HistoryWidget(Messages[Account][Stanza.attribute("from")]);
+            QString Count = Stanza.firstChildElement("fin").firstChildElement("set").firstChildElement("count").text();
+            if (!Count.isEmpty() && Last.isEmpty()) {
+                new HistoryWidget(Messages[Account][LastRequestKey]);
+            }
         }
     }
     
@@ -245,19 +256,20 @@ QAction *XEP0313::getActionForToolBar(QObject *Parent, int Account, const QStrin
     ServerHistory->setIcon(QPixmap(":/server_history.png"));
 	ServerHistory->setShortcut(QKeySequence("Ctrl+Shift+H"));
 	ServerHistory->setShortcutContext(Qt::WindowShortcut);
+    ServerHistory->setToolTip(tr("Server Message History"));
 
     connect(ServerHistory, &QAction::triggered, [this, Parent, Account, Contact, MUC]() {
         if (ServerSupportMam.contains(Account)) {
             QMessageBox::StandardButton Result = QMessageBox::question(qobject_cast<QWidget *>(Parent),
-                                                                       "Do you want to continue?",
-                                                                       "This operation can take a log of time. Do you want to continue?");
+                                                                       tr("Do you want to continue?"),
+                                                                       tr("This operation can take a lot of time. Do you want to continue?"));
             if (Result == QMessageBox::Yes) {
                 SendMAMRequest(Account, MUC, Contact);
             }
         } else {
             QMessageBox::critical(qobject_cast<QWidget *>(Parent),
-                                  "Server history unavailable",
-                                  "This server doesn't support server history or you are not connected to server.");
+                                  tr("Server history unavailable"),
+                                  tr("This server doesn't support server history or you are not connected to server."));
         }
     });
     
@@ -290,11 +302,13 @@ void XEP0313::SendMAMRequest(int Account, bool MUC, const QString &Jid, const QS
         return;
     }
     
+    QString UniqueId = SSHost->uniqueId(Account);
+    
     QDomDocument Document;
     
     QDomElement Stanza = Document.createElement("iq");
     Stanza.setAttribute("type", "set");
-    Stanza.setAttribute("id", SSHost->uniqueId(Account));
+    Stanza.setAttribute("id", UniqueId);
     if (MUC) {
         Stanza.setAttribute("to", Jid);
     }
@@ -306,16 +320,31 @@ void XEP0313::SendMAMRequest(int Account, bool MUC, const QString &Jid, const QS
     X.setAttribute("xmlns", "jabber:x:data");
     X.setAttribute("type", "submit");
     
-    QDomElement Field = Document.createElement("field");
-    Field.setAttribute("var", "FORM_TYPE");
-    Field.setAttribute("type", "hidden");
+    {
+        QDomElement Field = Document.createElement("field");
+        Field.setAttribute("var", "FORM_TYPE");
+        Field.setAttribute("type", "hidden");
+        
+        QDomElement Value = Document.createElement("value");
+        QDomText ValueText = Document.createTextNode("urn:xmpp:mam:0");
+        
+        Value.appendChild(ValueText);
+        Field.appendChild(Value);
+        X.appendChild(Field);
+    }
     
-    QDomElement Value = Document.createElement("value");
-    QDomText ValueText = Document.createTextNode("urn:xmpp:mam:0");
+    if (!MUC) {
+        QDomElement Field = Document.createElement("field");
+        Field.setAttribute("var", "with");
+        
+        QDomElement Value = Document.createElement("value");
+        QDomText ValueText = Document.createTextNode(Jid);
+        
+        Value.appendChild(ValueText);
+        Field.appendChild(Value);
+        X.appendChild(Field);
+    }
     
-    Value.appendChild(ValueText);
-    Field.appendChild(Value);
-    X.appendChild(Field);
     Query.appendChild(X);
     
     if (!AfterMessageId.isEmpty()) {
@@ -333,6 +362,16 @@ void XEP0313::SendMAMRequest(int Account, bool MUC, const QString &Jid, const QS
     Stanza.appendChild(Query);
     
     SSHost->sendStanza(Account, Stanza);
+}
+
+QString XEP0313::GetResourceFromJid(const QString &Jid)
+{
+    return Jid.section('/', 1);
+}
+
+QString XEP0313::RemoveResourceFromJid(const QString &Jid)
+{
+    return Jid.section('/', 0, 0);
 }
 
 void XEP0313::WriteDebugMessage(const QString &Message)
